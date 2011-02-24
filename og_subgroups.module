@@ -7,47 +7,48 @@
 
 /**
  * Check if a user has access permmission (given) in one of the encestors groups.
- * 
+ *
  * @param $entity_groups
- * 	 Array of group id to check and start moving up in the hierarchy.
- * 
- * @param $account 
- * 	 Optional; The account to check
- * 
+ *    Array of group id to check and start moving up in the hierarchy.
+ *
+ * @param $account
+ *    Optional; The account to check
+ *
  * @param $string_perm
- * 	 The permission string.
+ *    The permission string.
  */
-function og_subgroups_group_access_from_descendance($entity_groups, $string, $account = NULL) {
-	// If user has the permission in a parent group
-	foreach($entity_groups as $gid) {
-		if (og_user_access($gid, $string, $account, TRUE)) {
-			// TODO: replace the TRUE with a more contextial answer, including the
-			// hierarchy, and the group that gave the positive access.
-			return TRUE;
-		}
-	}
-	// Get all groups that are content of user_groups (as an array of group ids).
-	$groups = og_load_multiple($entity_groups);
-	$parent_groups = array();
-	foreach ($groups as $group) {
-		// Load the entity associated with the group.
-		$entity = og_load_entity_from_group($group->gid);
-		// Get all groups that are associated with passed group.
-		$parent_groups += og_get_entity_groups($group->entity_type, $entity);
-	}
-	if ($parent_groups) {
-		// Recurssion call of the function.
-		return  parenting_group_access_from_descendance($parent_groups, $string, $account);
-	}
-	else {
-		// Reached a dead end, return false.
-		return FALSE;
-	}
+function og_subgroups_user_access_from_descendance($entity_groups, $string, $account = NULL) {
+  // If user has the permission in a parent group
+  foreach($entity_groups as $gid) {
+    if (og_user_access($gid, $string, $account, TRUE)) {
+      // TODO: replace the TRUE with a more contextial answer, including the
+      // hierarchy, and the group that gave the positive access.
+      return TRUE;
+    }
+  }
+  // Get all groups that are content of user_groups (as an array of group ids).
+  $groups = og_load_multiple($entity_groups);
+  $parent_groups = array();
+  foreach ($groups as $group) {
+    // Load the entity associated with the group.
+    $entity = og_load_entity_from_group($group->gid);
+    // Get all groups that are associated with passed group.
+    $parent_groups += og_get_entity_groups($group->entity_type, $entity);
+  }
+  if ($parent_groups) {
+    // Recurssion call of the function.
+    return  og_subgroups_user_access_from_descendance($parent_groups, $string, $account);
+  }
+  else {
+    // Reached a dead end, return false.
+    return FALSE;
+  }
 }
 
 /**
  * Implements hook_og_user_access_alter()
  */
 function og_subgroups_og_user_access_alter(&$perm, $context) {
-  $perm[$context['string']] = parenting_group_access_from_descendance(array($context['group']->gid),  $context['string'], $context['account']);
+  // Update the permission for a user that tries to access a sub group.
+  $perm[$context['string']] = og_subgroups_user_access_from_descendance(array($context['group']->gid),  $context['string'], $context['account']);
 }
