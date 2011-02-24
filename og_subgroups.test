@@ -1,0 +1,108 @@
+<?php
+// $Id$
+
+/**
+ * Test the Organic groups subgroups API.
+ */
+class OgSubgroupsAccessFromDescendanceTestCase extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Organic groups Subgroups permissions inheritance',
+      'description' => 'Test the access of users to subgroups.',
+      'group' => 'Organic groups subgroups'
+    );
+  }
+
+  function setUp() {
+    parent::setUp('og_subgroups', 'entity_test');
+    // Add OG group field to the entity_test's "main" bundle.
+    og_create_field(OG_GROUP_FIELD, 'entity_test', 'main');
+    og_create_field(OG_AUDIENCE_FIELD, 'entity_test', 'main');
+  }
+
+
+  /**
+   * Use cases:
+   * - Check that parent user has access to all permission he has on groups he 
+   * is not memberof but that are descandents of his group
+   */
+  function testOgSubgroupsAccessFromDescendance() {
+    // Create user.
+    $user1 = $this->drupalCreateUser();
+    $user2 = $this->drupalCreateUser();
+    $user3 = $this->drupalCreateUser();
+    $user4 = $this->drupalCreateUser();
+    
+    $groups = array();
+
+    // Create an entity that is a group.
+    $entity = entity_create('entity_test', array('name' => 'main', 'uid' => $user1->uid));
+    $entity->{OG_GROUP_FIELD}[LANGUAGE_NONE][0]['value'] = 1;
+    $entity->save();
+    $groups[0] = og_get_group('entity_test', $entity->pid);
+    
+   // Create an entity that is a child group of the group above.
+    $entity = entity_create('entity_test', array('name' => 'first_child', 'uid' => $user2->uid));
+    $entity->{OG_GROUP_FIELD}[LANGUAGE_NONE][0]['value'] = 1;
+    $entity->{OG_AUDIENCE_FIELD}[LANGUAGE_NONE][0]['gid'] =  $groups[0]->gid;
+    $entity->save();
+    $groups[1] = og_get_group('entity_test', $entity->pid);
+    
+    // Create an entity that is a child group of the group above.
+    $entity = entity_create('entity_test', array('name' => 'second_child', 'uid' => $user3->uid));
+    $entity->{OG_GROUP_FIELD}[LANGUAGE_NONE][0]['value'] = 1;
+    $entity->{OG_AUDIENCE_FIELD}[LANGUAGE_NONE][0]['gid'] =  $groups[1]->gid;
+    $entity->save();
+    $groups[2] = og_get_group('entity_test', $entity->pid);
+    
+    // Create an entity that is a group content of group ID 1.
+    $entity = entity_create('entity_content_test', array('name' => 'content_second_child', 'uid' => $user3->uid));
+    $entity->{OG_AUDIENCE_FIELD}[LANGUAGE_NONE][0]['gid'] = $groups[2]->gid;
+    $entity->save();    
+    
+    $group_content[0] = $entity;
+
+    // Associate user4 to the group[2].
+    og_group($group[2]->gid, 'user', $user4);
+
+    // Assert the user is registered to the new group.
+    $string = 'administer group';
+    // Check user1 has adminster perm on parent group [0]
+    $this->assertTrue(og_user_access($groups[0]->gid, $string, user1, TRUE) , t('User1 have admister group permission to parent group 0'));
+    // Check user has admin perm on sub group that is he not member of.
+    $access_res = og_subgroups_user_access_from_descendance(array($groups[2]->gid), $string, $user1);
+    $this->assertTrue($access_res, t('User1 have admister group permission to subgroup 2'));
+
+    // Check permission.
+    $this->assertFalse(og_user_access($groups[0]->gid, $string, $user3), t('User3 does not have "Administer group" permission.'));
+    // Check user3 has no adminster perm on parent group [0]
+    $access_res = og_subgroups_user_access_from_descendance(array($groups[0]->gid), $string, $user1);
+    $this->assertFalse($access_res, t('User3 does not have admister group permission to group 0'));
+
+    // Change permissions to authenticated member.
+    //$roles = array_flip(og_get_global_roles());
+    // Authenticated role ID.
+   // $rid = $roles[OG_AUTHENTICATED_ROLE];
+
+   // $permissions = array(
+  //    'delete own article content' => 1,
+  ///    'administer group' => 1,
+  //  );
+  //  og_role_change_permissions($rid, $permissions);
+
+    // Verify proper permission changes.
+   // $this->assertFalse(og_user_access($group->gid, 'update own article content', $user2), t('User still does not have "update own article content" permission.'));
+   // $this->assertTrue(og_user_access($group->gid, 'delete own article content', $user2), t('User now has "delete own article content" permission.'));
+  //  $this->assertTrue(og_user_access($group->gid, 'administer group', $user2), t('User now has "administer group" permission.'));
+
+   // $permissions = array(
+   //   'delete own article content' => 1,
+   //   'administer group' => 0,
+  //  );
+ //  og_role_change_permissions($rid, $permissions);
+
+  //  $this->assertTrue(og_user_access($group->gid, 'delete own article content', $user2), t('User still has "delete own article content" permission.'));
+  //  $this->assertFalse(og_user_access($group->gid, 'administer group', $user2), t('User no longer has "administer group" permission.'));
+
+  }
+}
