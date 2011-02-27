@@ -101,6 +101,7 @@ function og_subgroups_node_access_records_alter(&$grants, $node) {
     // nothing, otherwise treat as a private group.
     if (($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'] == OG_CONTENT_ACCESS_PRIVATE) ||
        ($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'] == OG_CONTENT_ACCESS_DEFAULT && isset($grants))) {
+         // TODO: check that the grat is set with OG realm in case of default.
       $groups = og_get_entity_groups('node', $node);
       $private = TRUE;
     }
