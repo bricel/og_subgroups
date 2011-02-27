@@ -99,7 +99,8 @@ function og_subgroups_node_access_records_alter(&$grants, $node) {
   elseif (isset($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'])) {
     // If no groups are defined, this means it's a public group then do
     // nothing, otherwise treat as a private group.
-    if ($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'] == OG_CONTENT_ACCESS_PRIVATE && isset($grants)) {
+    if (($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'] == OG_CONTENT_ACCESS_PRIVATE) ||
+       ($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'] == OG_CONTENT_ACCESS_DEFAULT && isset($grants))) {
       $groups = og_get_entity_groups('node', $node);
       $private = TRUE;
     }
