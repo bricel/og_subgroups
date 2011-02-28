@@ -14,16 +14,14 @@
  *
  * @param $account
  *    Optional; The account to check
- *
  * @param $string_perm
  *    Optional; The permission string, if empty return the full tree stucture in
  *    $structure, otherwise stops when the permission is grant.
- *    
- * @param $parents
+ * @param $structure
  * 		Optional; This is the array that you should send by ref to get back the 
- * 		all the tree structure of the given groups, in the following format: 
- * 		['
- * 
+ * 		all the tree structure of the given groups.
+ *    Array contain 2 keys ['gid'] - group id, and ['level'] the depth of the 
+ *    parent.
  * @param $level
  * 		Optional; Level of tree to start counting from, nomaly no need to change 
  * 		this. Deafult 0 beeing the entity given.
@@ -97,11 +95,10 @@ function og_subgroups_node_access_records_alter(&$grants, $node) {
   }
   // Dealing with a group content.
   elseif (isset($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'])) {
-    // If no groups are defined, this means it's a public group then do
-    // nothing, otherwise treat as a private group.
+    // If no groups with og realm are defined, this means it's a public group
+    //  then do nothing, otherwise treat as a private group.
     if (($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'] == OG_CONTENT_ACCESS_PRIVATE) ||
-       ($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'] == OG_CONTENT_ACCESS_DEFAULT && isset($grants))) {
-         // TODO: check that the grat is set with OG realm in case of default.
+    ($node->{OG_CONTENT_ACCESS_FIELD}[LANGUAGE_NONE][0]['value'] == OG_CONTENT_ACCESS_DEFAULT && og_subgroups_grants_has_og_realm($grants))) {
       $groups = og_get_entity_groups('node', $node);
       $private = TRUE;
     }
@@ -128,3 +125,15 @@ function og_subgroups_node_access_records_alter(&$grants, $node) {
     }
   }
 }
+/*
+ * @return TRUE if $grants contain an OG realm
+ */
+function og_subgroups_grants_has_og_realm($grants) {
+  foreach ($grants as $granted) {
+    if ($granted['realm'] == OG_ACCESS_AUTHENTICATED_REALM) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
