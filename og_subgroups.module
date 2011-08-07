@@ -1,42 +1,62 @@
 <?php
+
 /**
  * @file
  * Enable defining hierarchy of groups for organic groups.
  */
 
-
 /**
- * Check if a user has access permmission (given) in one of the encestors groups
- * and retuen the tree structure of the group hierarchy.
+ * Implementation of hook_ctools_plugin_directory().
+ */
+function og_subgroups_ctools_plugin_directory($module, $plugin) {
+  // Safety: go away if CTools is not at an appropriate version.
+  if (!module_invoke('ctools', 'api_version', OG_REQUIRED_CTOOLS_API)) {
+    return;
+  }
+
+  if ($module == 'ctools') {
+    return 'plugins/' . $plugin;
+  }
+}
+/**
+ * Check if a user has access permission in one of the ancestors groups
+ * and return the tree structure of the group hierarchy.
  *
  * @param $entity_groups
  *    Array of group id to check and start moving up in the hierarchy.
- *
  * @param $account
  *    Optional; The account to check
- * @param $string_perm
+ * @param $string
  *    Optional; The permission string, if empty return the full tree stucture in
  *    $structure, otherwise stops when the permission is grant.
  * @param $structure
- * 		Optional; This is the array that you should send by ref to get back the 
+ * 		Optional; This is the array that you should send by ref to get back 
  * 		all the tree structure of the given groups.
- *    Array contain 2 keys ['gid'] - group id, and ['level'] the depth of the 
+ *    Array contain 2 keys ['gid'] - group id, and ['level'] the depth of the
  *    parent.
  * @param $level
- * 		Optional; Level of tree to start counting from, nomaly no need to change 
- * 		this. Deafult 0 beeing the entity given.
- * 
+ * 		Optional; Level of tree to start counting from, normaly there is no need
+ *    to change this. Default to 0 being the entity given.
+ *
  *	@return
- *		TRUE if user has access grant with the given perm to one of the enstertors 
+ *		TRUE if user has access grant with the given perm to one of the enstertors
  *		groups.
  */
-function og_subgroups_get_reverse_hierarchy_tree_perm($entity_groups, $string = '', $account = NULL, $structure = array(), $level = 0) {
+function og_subgroups_get_reverse_hierarchy_tree_perm($entity_groups, $string = '', $account = NULL, &$structure = array(), &$graph = FALSE , $level = 0) {
   // Check if user has the permission in a parent group.
   foreach($entity_groups as $gid) {
     // Save the hierarchy structure.
     $structure[$gid] = array();
     $structure[$gid]['gid'] = $gid;
     $structure[$gid]['level'] = $level;
+    
+    // Build a graph with graph api
+    if (is_array($graph)) {
+      $group = og_load($gid);
+      graphapi_set_node_title($graph, $gid,  $group->label);
+     // dpm($graph);
+    }
+    // Check access permission.
     if ($string) {
       if (og_user_access($gid, $string, $account, TRUE)) {
         return TRUE;
@@ -50,11 +70,19 @@ function og_subgroups_get_reverse_hierarchy_tree_perm($entity_groups, $string = 
     // Load the entity associated with the group.
     $entity = og_load_entity_from_group($group->gid);
     // Get all groups that are associated with passed group.
-    $parent_groups += og_get_entity_groups($group->entity_type, $entity);
+    $parents = og_get_entity_groups($group->entity_type, $entity);
+    $parent_groups += $parents;
+    // Build a graph path with graph api
+    if (is_array($graph)) {
+    	foreach ($parents as $parent) {
+    		graphapi_set_node_title($graph, $parent,  $parent);
+        graphapi_set_link_data($graph, $group->gid, $parent, array('color' => '#018FE2'));
+    	}
+    }
   }
   if ($parent_groups) {
     // Recurssion call of the function.
-    return  og_subgroups_get_reverse_hierarchy_tree_perm($parent_groups, $string, $account, &$structure, ++$level);
+    return  og_subgroups_get_reverse_hierarchy_tree_perm($parent_groups, $string, $account, $structure, $graph, ++$level);
   }
   else {
     // Reached a dead end, return false.
@@ -68,16 +96,16 @@ function og_subgroups_get_reverse_hierarchy_tree_perm($entity_groups, $string = 
 function og_subgroups_og_user_access_alter(&$perm, $context) {
   // Update the permission for a user that tries to access a sub group.
   // This gives to any users his og group permission to all his subgroups,
-  //  without the -need for him to be a member in the groups.
+  // without the -need for him to be a member in the groups.
   $perm[$context['string']] = og_subgroups_get_reverse_hierarchy_tree_perm(array($context['group']->gid),  $context['string'], $context['account']);
 }
 
 
 /**
  * Implements hook_node_access_records_alter().
- * 
+ *
  * This alter is fired on node save, we want to add view permission to a user's
- * subgroups (private groups), to do so we add the parent groups id to all 
+ * subgroups (private groups), to do so we add the parent groups id to all
  * groups.
  */
 function og_subgroups_node_access_records_alter(&$grants, $node) {
@@ -128,8 +156,9 @@ function og_subgroups_node_access_records_alter(&$grants, $node) {
     }
   }
 }
-/*
- * @return TRUE if $grants contain an OG realm
+
+/**
+ * Return TRUE if $grants contain an OG realm
  */
 function og_subgroups_grants_has_og_realm($grants) {
   foreach ($grants as $granted) {
@@ -140,3 +169,40 @@ function og_subgroups_grants_has_og_realm($grants) {
   return FALSE;
 }
 
+/**
+ * Get hierarchy tree.
+ *
+ * @param $entity_type
+ * @param $etid
+ * @param $options
+ */
+function og_get_hierarchy($entity_type, $etid, $options = array(), &$tree = array(), $depth = 0) {
+  $options += array(
+    'direction' => 'up',
+    'type' => 'single',
+    'sanitize' => TRUE,
+  );
+
+  $wrapper = entity_metadata_wrapper($entity_type, $etid);
+
+  if ($depth == 0 && $group = $wrapper->group->value()) {
+    if ($options['type'] == 'single') {
+      $tree[$group->gid] = og_label($group->gid, $options['sanitize']);
+    }
+    else {
+      $tree[$depth][$group->gid] = og_label($group->gid, $options['sanitize']);
+    }
+  }
+
+  if ($options['direction'] == 'up' && $options['type'] == 'single') {
+    $group = FALSE;
+    // Get the first group associated with the entity.
+    if ($wrapper->og_membership->get(0)->value()) {
+      $group = $wrapper->og_membership->get(0)->group->value();
+      $tree[$group->gid] = og_label($group->gid, $options['sanitize']);
+      og_get_hierarchy($group->entity_type, $group->etid, $options, $tree, $depth + 1);
+    }
+  }
+
+  return $tree;
+}
